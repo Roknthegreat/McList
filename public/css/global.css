@@ -1,0 +1,73 @@
+/* ── ENDER LIST — Global Background ────────────────────────
+   Include this on every page. Also add <div id="bg-layer"></div>
+   immediately after <body> open tag.
+─────────────────────────────────────────────────────────── */
+
+/* ── Reset + base ───────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* ── Root palette ───────────────────────────────────────── */
+:root {
+  --bg-card:   rgba(10,15,30,0.68);
+  --bg-card-h: rgba(12,18,38,0.84);
+  --bg-panel:  rgba(8,12,26,0.78);
+  --bg-nav:    rgba(4,7,16,0.94);
+  --border:    rgba(255,255,255,0.08);
+  --border2:   rgba(255,255,255,0.13);
+  --green:     #4ade80;
+  --green-d:   #22c55e;
+  --pink:      #e879a0;
+  --teal:      #2dd4bf;
+  --amber:     #fbbf24;
+  --red:       #f87171;
+  --blue:      #38bdf8;
+  --text:      #eef2ff;
+  --text-m:    #8b9ab5;
+  --text-d:    #435068;
+  --gold:      #fbbf24;
+  --vip:       #c084fc;
+  --r:         12px;
+}
+
+/* ── Body ───────────────────────────────────────────────── */
+html { min-height: 100%; }
+body {
+  font-family: "Outfit", sans-serif;
+  font-size: 14px;
+  min-height: 100vh;
+  overflow-x: hidden;
+  color: var(--text);
+  background: #060a14;         /* deep fallback */
+}
+
+/* ── Film-grain noise overlay ───────────────────────────── */
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: 2;
+  opacity: 0.028; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+}
+
+/* ── Background layer (parallax image + gradient vignette) ─ */
+#bg-layer {
+  position: fixed; inset: 0; z-index: 0;
+  background-image: url("/img/bg.png");
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
+}
+
+#bg-layer::after {
+  content: "";
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(ellipse 130% 70% at 50% 30%, transparent 0%, rgba(4,8,20,0.45) 70%, rgba(4,8,20,0.75) 100%),
+    linear-gradient(to bottom, rgba(4,8,20,0.58) 0%, rgba(4,8,20,0.20) 35%, rgba(4,8,20,0.32) 65%, rgba(4,8,20,0.72) 100%);
+}
+
+/* ── Page content sits above bg-layer ───────────────────── */
+body > *:not(#bg-layer) {
+  position: relative;
+  z-index: 1;
+}
