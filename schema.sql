@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════════╗
--- ║  ENDER LIST — Supabase Schema Migration                    ║
--- ║  Run this in the Supabase SQL Editor (Dashboard → SQL)     ║
+-- ║  ENDER LIST — Self-Hosted PostgreSQL 16 Schema             ║
+-- ║  Run against your local Postgres instance                  ║
 -- ╚══════════════════════════════════════════════════════════════╝
 
 -- ── USERS ───────────────────────────────────────────────────────
@@ -112,7 +112,7 @@ CREATE TABLE IF NOT EXISTS ads (
   created_at    TIMESTAMPTZ DEFAULT now()
 );
 
--- ── SESSIONS (for express-session via Supabase) ─────────────────
+-- ── SESSIONS (for express-session via connect-pg-simple) ────────
 CREATE TABLE IF NOT EXISTS sessions (
   sid           TEXT PRIMARY KEY,
   sess          JSONB NOT NULL,
@@ -120,7 +120,16 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_expire ON sessions(expire);
 
--- ── AUDIT LOG ───────────────────────────────────────────────────
+-- ── REVOKED TOKENS (for JWT denylist) ───────────────────────────
+CREATE TABLE IF NOT EXISTS revoked_tokens (
+  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  token_jti     TEXT UNIQUE NOT NULL,
+  revoked_at    TIMESTAMPTZ DEFAULT now(),
+  expires_at    TIMESTAMPTZ NOT NULL     -- auto-cleanup after JWT would expire
+);
+CREATE INDEX IF NOT EXISTS idx_revoked_jti ON revoked_tokens(token_jti);
+
+-- ── AUDIT LOG (append-only, tamper-proof) ───────────────────────
 CREATE TABLE IF NOT EXISTS audit_log (
   id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   actor_type    TEXT NOT NULL,           -- 'staff' | 'user' | 'system'
@@ -129,9 +138,55 @@ CREATE TABLE IF NOT EXISTS audit_log (
   target_type   TEXT,
   target_id     UUID,
   details       JSONB DEFAULT '{}'::jsonb,
+  ip_address    INET,
   created_at    TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_log(created_at DESC);
+
+-- Prevent any modification or deletion of audit records
+REVOKE UPDATE, DELETE, TRUNCATE ON audit_log FROM app_user;
+
+CREATE OR REPLACE FUNCTION prevent_audit_modification()
+RETURNS TRIGGER AS $$
+BEGIN
+  RAISE EXCEPTION 'Audit log is immutable';
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS no_audit_changes ON audit_log;
+CREATE TRIGGER no_audit_changes
+  BEFORE UPDATE OR DELETE ON audit_log
+  FOR EACH ROW EXECUTE FUNCTION prevent_audit_modification();
+
+-- ── ROW LEVEL SECURITY ──────────────────────────────────────────
+
+ALTER TABLE servers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE users   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE votes   ENABLE ROW LEVEL SECURITY;
+
+-- Users can only modify their own servers
+CREATE POLICY owner_only_select ON servers FOR SELECT USING (true);
+CREATE POLICY owner_only_insert ON servers FOR INSERT WITH CHECK (
+  owner_id = current_setting('app.current_user_id', true)::uuid
+);
+CREATE POLICY owner_only_update ON servers FOR UPDATE USING (
+  owner_id = current_setting('app.current_user_id', true)::uuid
+);
+CREATE POLICY owner_only_delete ON servers FOR DELETE USING (
+  owner_id = current_setting('app.current_user_id', true)::uuid
+);
+
+-- Users can only see their own profile for modifications
+CREATE POLICY users_select_all ON users FOR SELECT USING (true);
+CREATE POLICY users_update_own ON users FOR UPDATE USING (
+  id = current_setting('app.current_user_id', true)::uuid
+);
+
+-- Votes: anyone can read, users insert their own
+CREATE POLICY votes_select_all ON votes FOR SELECT USING (true);
+CREATE POLICY votes_insert_own ON votes FOR INSERT WITH CHECK (
+  user_id = current_setting('app.current_user_id', true)::uuid
+);
 
 -- ── HELPER: auto-update updated_at ──────────────────────────────
 CREATE OR REPLACE FUNCTION update_updated_at()
@@ -142,6 +197,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS trg_servers_updated ON servers;
 CREATE TRIGGER trg_servers_updated
   BEFORE UPDATE ON servers
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
@@ -154,6 +210,10 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- ── ROW LEVEL SECURITY (optional — enable per table as needed) ──
--- ALTER TABLE servers ENABLE ROW LEVEL SECURITY;
--- ALTER TABLE votes   ENABLE ROW LEVEL SECURITY;
+-- ── HELPER: clean expired revoked tokens ────────────────────────
+CREATE OR REPLACE FUNCTION clean_expired_revoked_tokens()
+RETURNS void AS $$
+BEGIN
+  DELETE FROM revoked_tokens WHERE expires_at < now();
+END;
+$$ LANGUAGE plpgsql;

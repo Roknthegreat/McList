@@ -1,16 +1,17 @@
 const express = require('express');
-const supabase = require('../db');
+const { pool } = require('../db');
 const { requireApiToken } = require('../middleware');
 const router = express.Router();
 
 // ── GET /api/v1/server — Get your server info ────────────────
 router.get('/server', requireApiToken, async (req, res) => {
-  const { data } = await supabase
-    .from('servers')
-    .select('id, name, ip, port, player_count, max_players, is_online, total_votes, version, tags, is_featured, created_at, updated_at')
-    .eq('id', req.apiServer.id)
-    .single();
-  res.json(data);
+  const { rows } = await pool.query(
+    `SELECT id, name, ip, port, player_count, max_players, is_online, total_votes,
+     version, tags, is_featured, created_at, updated_at
+     FROM servers WHERE id = $1`,
+    [req.apiServer.id]
+  );
+  res.json(rows[0]);
 });
 
 // ── POST /api/v1/server/heartbeat — Update player count ──────
@@ -22,14 +23,26 @@ router.post('/server/heartbeat', requireApiToken, express.json(), async (req, re
   if (typeof player_count === 'number' && player_count >= 0) updates.player_count = Math.min(player_count, 1000000);
   if (typeof max_players === 'number' && max_players > 0) updates.max_players = Math.min(max_players, 1000000);
 
-  await supabase.from('servers').update(updates).eq('id', sid);
+  const setClauses = [];
+  const params = [];
+  let paramIdx = 1;
+  for (const [key, val] of Object.entries(updates)) {
+    setClauses.push(`${key} = $${paramIdx}`);
+    params.push(val);
+    paramIdx++;
+  }
+  params.push(sid);
+
+  await pool.query(
+    `UPDATE servers SET ${setClauses.join(', ')} WHERE id = $${paramIdx}`,
+    params
+  );
 
   // Record metric snapshot
-  await supabase.from('server_metrics').insert({
-    server_id: sid,
-    player_count: updates.player_count || 0,
-    is_online: updates.is_online
-  });
+  await pool.query(
+    'INSERT INTO server_metrics (server_id, player_count, is_online) VALUES ($1, $2, $3)',
+    [sid, updates.player_count || 0, updates.is_online]
+  );
 
   res.json({ ok: true, recorded: updates });
 });
@@ -37,15 +50,19 @@ router.post('/server/heartbeat', requireApiToken, express.json(), async (req, re
 // ── GET /api/v1/server/votes — Get recent votes ─────────────
 router.get('/server/votes', requireApiToken, async (req, res) => {
   const since = req.query.since || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { data, count } = await supabase
-    .from('votes')
-    .select('mc_username, created_at', { count: 'exact' })
-    .eq('server_id', req.apiServer.id)
-    .gte('created_at', since)
-    .order('created_at', { ascending: false })
-    .limit(100);
+  const { rows } = await pool.query(
+    `SELECT mc_username, created_at FROM votes
+     WHERE server_id = $1 AND created_at >= $2
+     ORDER BY created_at DESC LIMIT 100`,
+    [req.apiServer.id, since]
+  );
 
-  res.json({ votes: data || [], total: count || 0, since });
+  const { rows: countRows } = await pool.query(
+    'SELECT COUNT(*) FROM votes WHERE server_id = $1 AND created_at >= $2',
+    [req.apiServer.id, since]
+  );
+
+  res.json({ votes: rows, total: parseInt(countRows[0].count), since });
 });
 
 // ── GET /api/v1/server/metrics — Get player history ──────────
@@ -53,14 +70,14 @@ router.get('/server/metrics', requireApiToken, async (req, res) => {
   const hours = Math.min(168, parseInt(req.query.hours) || 24); // max 7 days
   const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 
-  const { data } = await supabase
-    .from('server_metrics')
-    .select('player_count, is_online, recorded_at')
-    .eq('server_id', req.apiServer.id)
-    .gte('recorded_at', since)
-    .order('recorded_at', { ascending: true });
+  const { rows } = await pool.query(
+    `SELECT player_count, is_online, recorded_at FROM server_metrics
+     WHERE server_id = $1 AND recorded_at >= $2
+     ORDER BY recorded_at ASC`,
+    [req.apiServer.id, since]
+  );
 
-  res.json({ metrics: data || [], hours });
+  res.json({ metrics: rows, hours });
 });
 
 // ── POST /api/v1/server/vote/check — Check if user voted ────
@@ -69,15 +86,13 @@ router.post('/server/vote/check', requireApiToken, express.json(), async (req, r
   if (!username) return res.status(400).json({ error: 'username required' });
 
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-  const { data } = await supabase
-    .from('votes')
-    .select('created_at')
-    .eq('server_id', req.apiServer.id)
-    .eq('mc_username', username)
-    .gte('created_at', twoHoursAgo)
-    .limit(1);
+  const { rows } = await pool.query(
+    `SELECT created_at FROM votes
+     WHERE server_id = $1 AND mc_username = $2 AND created_at >= $3 LIMIT 1`,
+    [req.apiServer.id, username, twoHoursAgo]
+  );
 
-  res.json({ has_voted: data && data.length > 0, username });
+  res.json({ has_voted: rows.length > 0, username });
 });
 
 // ── GET /api/v1/server/top-voters — Top voters this month ────
@@ -85,51 +100,44 @@ router.get('/server/top-voters', requireApiToken, async (req, res) => {
   const monthStart = new Date();
   monthStart.setDate(1); monthStart.setHours(0, 0, 0, 0);
 
-  const { data } = await supabase
-    .from('votes')
-    .select('mc_username')
-    .eq('server_id', req.apiServer.id)
-    .gte('created_at', monthStart.toISOString());
+  const { rows } = await pool.query(
+    `SELECT mc_username, COUNT(*) AS votes FROM votes
+     WHERE server_id = $1 AND created_at >= $2 AND mc_username IS NOT NULL
+     GROUP BY mc_username ORDER BY votes DESC LIMIT 10`,
+    [req.apiServer.id, monthStart.toISOString()]
+  );
 
-  // Count by username
-  const counts = {};
-  (data || []).forEach(v => {
-    if (v.mc_username) counts[v.mc_username] = (counts[v.mc_username] || 0) + 1;
-  });
-
-  const top = Object.entries(counts)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 10)
-    .map(([username, votes]) => ({ username, votes }));
-
-  res.json({ top_voters: top });
+  res.json({ top_voters: rows.map(r => ({ username: r.mc_username, votes: parseInt(r.votes) })) });
 });
 
 // ── Public: Get ads for display ──────────────────────────────
 router.get('/ads', async (req, res) => {
   const placement = req.query.placement || 'banner';
-  const { data } = await supabase
-    .from('ads')
-    .select('id, name, href, image_url, placement')
-    .eq('is_active', true)
-    .eq('placement', placement)
-    .order('created_at', { ascending: false });
+  const { rows } = await pool.query(
+    `SELECT id, name, href, image_url, placement FROM ads
+     WHERE is_active = true AND placement = $1
+     ORDER BY created_at DESC`,
+    [placement]
+  );
 
   // Track impressions
-  if (data && data.length > 0) {
-    for (const ad of data) {
-      supabase.from('ads').update({ impressions: ad.impressions + 1 }).eq('id', ad.id).then(() => {});
-    }
+  if (rows.length > 0) {
+    const ids = rows.map(a => a.id);
+    pool.query(
+      `UPDATE ads SET impressions = impressions + 1 WHERE id = ANY($1)`,
+      [ids]
+    ).catch(() => {});
   }
-  res.json(data || []);
+
+  res.json(rows);
 });
 
 // ── Track ad click ───────────────────────────────────────────
 router.post('/ads/:id/click', async (req, res) => {
-  await supabase.rpc('increment_ad_clicks', { aid: req.params.id }).catch(async () => {
-    const { data: ad } = await supabase.from('ads').select('clicks').eq('id', req.params.id).single();
-    if (ad) await supabase.from('ads').update({ clicks: (ad.clicks || 0) + 1 }).eq('id', req.params.id);
-  });
+  await pool.query(
+    'UPDATE ads SET clicks = clicks + 1 WHERE id = $1',
+    [req.params.id]
+  );
   res.json({ ok: true });
 });
 

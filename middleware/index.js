@@ -1,4 +1,5 @@
 // ── Auth & permission middleware ─────────────────────────────
+const { pool } = require('../db');
 
 // Require logged-in user (OAuth)
 function requireUser(req, res, next) {
@@ -50,16 +51,14 @@ async function requireApiToken(req, res, next) {
   const token = req.headers['x-api-token'] || req.query.token;
   if (!token) return res.status(401).json({ error: 'API token required. Pass via X-API-Token header.' });
 
-  const supabase = require('../db');
-  const { data } = await supabase
-    .from('servers')
-    .select('id, name, is_banned')
-    .eq('api_token', token)
-    .single();
+  const { rows } = await pool.query(
+    'SELECT id, name, is_banned FROM servers WHERE api_token = $1',
+    [token]
+  );
 
-  if (!data) return res.status(401).json({ error: 'Invalid API token' });
-  if (data.is_banned) return res.status(403).json({ error: 'This server has been banned' });
-  req.apiServer = data;
+  if (rows.length === 0) return res.status(401).json({ error: 'Invalid API token' });
+  if (rows[0].is_banned) return res.status(403).json({ error: 'This server has been banned' });
+  req.apiServer = rows[0];
   next();
 }
 

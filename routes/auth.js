@@ -2,8 +2,8 @@ const express = require('express');
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const DiscordStrategy = require('passport-discord').Strategy;
-const bcrypt = require('bcryptjs');
-const supabase = require('../db');
+const argon2 = require('argon2');
+const { pool } = require('../db');
 const router = express.Router();
 
 // ── Passport serialization ───────────────────────────────────
@@ -18,31 +18,24 @@ if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_ID !== 'your-googl
     callbackURL: `${process.env.BASE_URL}/auth/google/callback`
   }, async (accessToken, refreshToken, profile, done) => {
     try {
-      const { data: existing } = await supabase
-        .from('users')
-        .select('*')
-        .eq('oauth_provider', 'google')
-        .eq('oauth_id', profile.id)
-        .single();
+      const { rows } = await pool.query(
+        'SELECT * FROM users WHERE oauth_provider = $1 AND oauth_id = $2',
+        ['google', profile.id]
+      );
 
-      if (existing) {
+      if (rows.length > 0) {
+        const existing = rows[0];
         if (existing.is_banned) return done(null, false, { message: 'Account banned: ' + existing.ban_reason });
         return done(null, existing);
       }
 
-      const { data: newUser } = await supabase
-        .from('users')
-        .insert({
-          oauth_provider: 'google',
-          oauth_id: profile.id,
-          username: profile.displayName,
-          email: profile.emails?.[0]?.value,
-          avatar: profile.photos?.[0]?.value
-        })
-        .select()
-        .single();
+      const { rows: newRows } = await pool.query(
+        `INSERT INTO users (oauth_provider, oauth_id, username, email, avatar)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        ['google', profile.id, profile.displayName, profile.emails?.[0]?.value, profile.photos?.[0]?.value]
+      );
 
-      done(null, newUser);
+      done(null, newRows[0]);
     } catch (err) { done(err); }
   }));
 }
@@ -56,14 +49,13 @@ if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_ID !== 'your-dis
     scope: ['identify', 'email']
   }, async (accessToken, refreshToken, profile, done) => {
     try {
-      const { data: existing } = await supabase
-        .from('users')
-        .select('*')
-        .eq('oauth_provider', 'discord')
-        .eq('oauth_id', profile.id)
-        .single();
+      const { rows } = await pool.query(
+        'SELECT * FROM users WHERE oauth_provider = $1 AND oauth_id = $2',
+        ['discord', profile.id]
+      );
 
-      if (existing) {
+      if (rows.length > 0) {
+        const existing = rows[0];
         if (existing.is_banned) return done(null, false, { message: 'Account banned' });
         return done(null, existing);
       }
@@ -72,19 +64,13 @@ if (process.env.DISCORD_CLIENT_ID && process.env.DISCORD_CLIENT_ID !== 'your-dis
         ? `https://cdn.discordapp.com/avatars/${profile.id}/${profile.avatar}.png`
         : null;
 
-      const { data: newUser } = await supabase
-        .from('users')
-        .insert({
-          oauth_provider: 'discord',
-          oauth_id: profile.id,
-          username: profile.username,
-          email: profile.email,
-          avatar
-        })
-        .select()
-        .single();
+      const { rows: newRows } = await pool.query(
+        `INSERT INTO users (oauth_provider, oauth_id, username, email, avatar)
+         VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+        ['discord', profile.id, profile.username, profile.email, avatar]
+      );
 
-      done(null, newUser);
+      done(null, newRows[0]);
     } catch (err) { done(err); }
   }));
 }
@@ -127,15 +113,16 @@ router.post('/staff/login', express.json(), async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'Username and password required' });
 
-  const { data: staff } = await supabase
-    .from('staff')
-    .select('*')
-    .eq('username', username.toLowerCase().trim())
-    .single();
+  const { rows } = await pool.query(
+    'SELECT * FROM staff WHERE username = $1',
+    [username.toLowerCase().trim()]
+  );
 
-  if (!staff || !bcrypt.compareSync(password, staff.password_hash)) {
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
+  const staff = rows[0];
+  if (!staff) return res.status(401).json({ error: 'Invalid credentials' });
+
+  const valid = await argon2.verify(staff.password_hash, password);
+  if (!valid) return res.status(401).json({ error: 'Invalid credentials' });
 
   req.session.staff = {
     id: staff.id,

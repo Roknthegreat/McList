@@ -23,7 +23,7 @@ app.use('/auth/', rateLimit({ windowMs: 60_000, max: 20, message: { error: 'Too 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
-// ── Sessions (stored in memory for dev — swap to Supabase/Redis in prod) ──
+// ── Sessions (stored in memory for dev — swap to pg/Redis in prod) ──
 app.use(session({
   secret: process.env.SESSION_SECRET || 'dev-secret-change-me',
   resave: false,
