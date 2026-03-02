@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Documentation — Ender List</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg-card: rgba(10,15,30,0.68); --bg-card-h: rgba(12,18,38,0.84);
+  --bg-panel: rgba(8,12,26,0.78); --bg-nav: rgba(4,7,16,0.94);
+  --border: rgba(255,255,255,0.08); --border2: rgba(255,255,255,0.13);
+  --green: #4ade80; --green-d: #22c55e; --pink: #e879a0; --teal: #2dd4bf;
+  --amber: #fbbf24; --red: #f87171; --blue: #38bdf8;
+  --text: #eef2ff; --text-m: #8b9ab5; --text-d: #435068;
+  --gold: #fbbf24; --vip: #c084fc; --r: 12px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: "Outfit", sans-serif; font-size: 14px; min-height: 100vh;
+  overflow-x: hidden; color: var(--text);
+  background: #060a14;
+}
+body::before {
+  content: ""; position: fixed; inset: 0; z-index: 0; opacity: 0.028; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px;
+}
+.page-wrap { position: relative; z-index: 1; min-height: 100vh; display: flex; flex-direction: column; }
+nav {
+  background: var(--bg-nav); backdrop-filter: blur(28px) saturate(1.5);
+  border-bottom: 1px solid rgba(255,255,255,0.07); position: sticky; top: 0; z-index: 200;
+}
+.nav-inner {
+  max-width: 1100px; margin: 0 auto; padding: 0 20px;
+  height: 58px; display: flex; align-items: center; gap: 18px;
+}
+.logo-wrap { display: flex; align-items: center; text-decoration: none; gap: 10px; flex-shrink: 0; }
+.logo-svg { width: 32px; height: 32px; }
+.logo-t { font-family: "Nunito",sans-serif; font-weight: 900; font-size: 18px; color: var(--green); letter-spacing: 0.04em; text-shadow: 0 0 16px rgba(74,222,128,0.5); }
+.nav-links { display: flex; gap: 2px; margin-left: auto; }
+.nav-link {
+  font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.50);
+  text-decoration: none; padding: 6px 13px; border-radius: 6px;
+  transition: color .15s ease, background .15s ease; cursor: pointer;
+}
+.nav-link:hover { color: #fff; background: rgba(255,255,255,0.08); }
+.content { max-width: 900px; margin: 0 auto; padding: 32px 20px 64px; flex: 1; }
+.glass {
+  background: var(--bg-panel); backdrop-filter: blur(26px) saturate(1.5);
+  border-radius: var(--r); border: 1px solid var(--border2);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.38), inset 0 1px 0 rgba(255,255,255,0.07);
+  padding: 28px 32px;
+}
+h1 { font-family: "Nunito",sans-serif; font-size: 28px; font-weight: 900; letter-spacing: -0.03em; margin-bottom: 8px; }
+h2 { font-family: "Nunito",sans-serif; font-size: 20px; font-weight: 800; letter-spacing: -0.02em; margin: 28px 0 12px; color: var(--text); }
+h3 { font-family: "Nunito",sans-serif; font-size: 16px; font-weight: 800; margin: 20px 0 8px; color: var(--text); }
+p, li { color: var(--text-m); line-height: 1.75; margin-bottom: 10px; }
+ul { padding-left: 20px; margin-bottom: 16px; }
+a { color: var(--green); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+  background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+  padding: 2px 6px; border-radius: 4px; font-size: 13px; color: var(--teal);
+}
+pre {
+  background: rgba(0,0,0,0.35); border: 1px solid var(--border2);
+  border-radius: 8px; padding: 16px 20px; overflow-x: auto;
+  margin: 12px 0 20px; font-size: 13px; line-height: 1.6; color: var(--text-m);
+}
+pre code { background: none; border: none; padding: 0; color: inherit; }
+.label { font-size: 12px; font-weight: 700; color: var(--text-d); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px; }
+input[type="text"], input[type="url"], input[type="number"], input[type="password"], textarea, select {
+  width: 100%; background: rgba(255,255,255,0.06); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 14px; color: #fff;
+  font-family: "Outfit",sans-serif; font-size: 14px; outline: none;
+  transition: border-color .15s ease, background .15s ease;
+}
+input:focus, textarea:focus, select:focus { border-color: rgba(74,222,128,0.45); background: rgba(255,255,255,0.08); }
+textarea { resize: vertical; min-height: 100px; }
+select { color-scheme: dark; cursor: pointer; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  font-family: "Nunito",sans-serif; font-size: 14px; font-weight: 800;
+  background: linear-gradient(135deg, #4ade80, #22c55e); color: #031a09;
+  padding: 12px 28px; border-radius: 10px; border: none; cursor: pointer;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  box-shadow: 0 4px 16px rgba(74,222,128,0.35);
+  transition: background .15s ease, box-shadow .15s ease, transform .15s cubic-bezier(.34,1.56,.64,1);
+}
+.btn:hover { background: linear-gradient(135deg, #86efac, #4ade80); box-shadow: 0 6px 22px rgba(74,222,128,0.55); transform: translateY(-1px); }
+.btn:active { transform: scale(0.97); }
+.btn-outline {
+  background: transparent; border: 1px solid var(--border2); color: var(--text-m);
+  box-shadow: none; font-weight: 700;
+}
+.btn-outline:hover { background: rgba(255,255,255,0.06); color: #fff; border-color: rgba(255,255,255,0.24); box-shadow: none; transform: translateY(-1px); }
+.btn-red { background: linear-gradient(135deg, #f87171, #ef4444); box-shadow: 0 4px 16px rgba(239,68,68,0.3); }
+.btn-red:hover { background: linear-gradient(135deg, #fca5a5, #f87171); box-shadow: 0 6px 22px rgba(239,68,68,0.45); }
+.form-group { margin-bottom: 18px; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.toast {
+  position: fixed; bottom: 24px; left: 50%;
+  transform: translateX(-50%) translateY(80px);
+  background: rgba(8,12,26,0.96); color: #fff;
+  font-size: 13px; font-weight: 700; padding: 12px 24px; border-radius: 10px;
+  border: 1px solid rgba(74,222,128,0.22);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.55);
+  z-index: 9999; transition: transform .3s cubic-bezier(.34,1.56,.64,1);
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+footer {
+  max-width: 900px; margin: 0 auto; padding: 24px 20px 40px;
+  display: flex; flex-wrap: wrap; gap: 24px; justify-content: space-between; align-items: center;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+footer a { font-size: 12px; color: var(--text-m); text-decoration: none; }
+footer a:hover { color: #fff; text-decoration: none; }
+@media (max-width: 600px) {
+  .form-row { grid-template-columns: 1fr; }
+  .glass { padding: 20px 16px; }
+  .content { padding: 20px 12px 48px; }
+}
+</style>
+</head>
+<body>
+<div class="page-wrap">
+<nav>
+  <div class="nav-inner">
+    <a class="logo-wrap" href="/">
+      <svg class="logo-svg" viewBox="0 0 40 40" fill="none"><rect x="16" y="2" width="8" height="4" fill="#4ade80"/><rect x="12" y="6" width="4" height="4" fill="#4ade80"/><rect x="24" y="6" width="4" height="4" fill="#4ade80"/><rect x="8" y="10" width="4" height="4" fill="#4ade80"/><rect x="12" y="10" width="16" height="4" fill="#86efac"/><rect x="28" y="10" width="4" height="4" fill="#4ade80"/><rect x="6" y="14" width="4" height="4" fill="#22c55e"/><rect x="10" y="14" width="20" height="4" fill="#4ade80"/><rect x="30" y="14" width="4" height="4" fill="#22c55e"/><rect x="8" y="18" width="24" height="4" fill="#4ade80"/><rect x="10" y="22" width="20" height="4" fill="#22c55e"/><rect x="12" y="26" width="16" height="4" fill="#16a34a"/><rect x="14" y="30" width="12" height="4" fill="#15803d"/><rect x="16" y="34" width="8" height="4" fill="#166534"/></svg>
+      <span class="logo-t">ENDER LIST</span>
+    </a>
+    <div class="nav-links">
+      <a class="nav-link" href="/">Servers</a>
+      <a class="nav-link" href="/faq">FAQ</a>
+      <a class="nav-link" href="/api-docs">API</a>
+      <a class="nav-link" href="/advertise">Advertise</a>
+    </div>
+  </div>
+</nav>
+
+<div class="content">
+  <div class="glass">
+    <h1>API Documentation</h1>
+    <p style="margin-bottom:24px">Integrate your Minecraft server with Ender List in minutes. Every server gets a unique API token when listed.</p>
+
+    <h2>Getting Your API Token</h2>
+    <p>When you <a href="/add-server">add your server</a>, you'll receive a token starting with <code>el_</code>. Pass it via the <code>X-API-Token</code> header in all requests.</p>
+
+    <h2>Base URL</h2>
+    <pre><code>https://enderlist.com/api/v1</code></pre>
+
+    <h2>Authentication</h2>
+    <pre><code>X-API-Token: el_your_token_here</code></pre>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:28px 0">
+
+    <h2>Endpoints</h2>
+
+    <h3>GET /api/v1/server</h3>
+    <p>Get your server's current info.</p>
+    <pre><code>curl -H "X-API-Token: el_xxx" https://enderlist.com/api/v1/server</code></pre>
+
+    <h3>POST /api/v1/server/heartbeat</h3>
+    <p>Update player count and online status. Send this every 1-5 minutes from your plugin.</p>
+    <pre><code>curl -X POST https://enderlist.com/api/v1/server/heartbeat \
+  -H "X-API-Token: el_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"player_count": 42, "max_players": 100, "is_online": true}'</code></pre>
+
+    <h3>GET /api/v1/server/votes</h3>
+    <p>Get recent votes. Optional <code>?since=ISO_DATE</code> param (defaults to last 24h).</p>
+    <pre><code>curl -H "X-API-Token: el_xxx" https://enderlist.com/api/v1/server/votes</code></pre>
+
+    <h3>POST /api/v1/server/vote/check</h3>
+    <p>Check if a specific player has voted recently. Great for in-game vote rewards!</p>
+    <pre><code>curl -X POST https://enderlist.com/api/v1/server/vote/check \
+  -H "X-API-Token: el_xxx" \
+  -H "Content-Type: application/json" \
+  -d '{"username": "Notch"}'</code></pre>
+    <p>Response:</p>
+    <pre><code>{"has_voted": true, "username": "Notch"}</code></pre>
+
+    <h3>GET /api/v1/server/top-voters</h3>
+    <p>Get the top 10 voters for your server this month.</p>
+    <pre><code>curl -H "X-API-Token: el_xxx" https://enderlist.com/api/v1/server/top-voters</code></pre>
+
+    <h3>GET /api/v1/server/metrics</h3>
+    <p>Get player count history. Optional <code>?hours=24</code> (max 168 = 7 days).</p>
+    <pre><code>curl -H "X-API-Token: el_xxx" "https://enderlist.com/api/v1/server/metrics?hours=48"</code></pre>
+
+    <hr style="border:none;border-top:1px solid var(--border);margin:28px 0">
+
+    <h2>Rate Limits</h2>
+    <p>API requests are limited to <strong>120 requests per minute</strong>. Heartbeats should be sent every 1-5 minutes (not more frequently).</p>
+
+    <h2>Spigot / Paper Plugin Example</h2>
+    <p>Minimal Java snippet for sending heartbeats:</p>
+    <pre><code>// In your plugin's onEnable() — schedule a repeating task
+Bukkit.getScheduler().runTaskTimerAsynchronously(this, () -> {
+    try {
+        URL url = new URL("https://enderlist.com/api/v1/server/heartbeat");
+        HttpURLConnection con = (HttpURLConnection) url.openConnection();
+        con.setRequestMethod("POST");
+        con.setRequestProperty("X-API-Token", "el_YOUR_TOKEN");
+        con.setRequestProperty("Content-Type", "application/json");
+        con.setDoOutput(true);
+
+        String json = String.format(
+            "{"player_count":%d,"max_players":%d,"is_online":true}",
+            Bukkit.getOnlinePlayers().size(),
+            Bukkit.getMaxPlayers()
+        );
+
+        con.getOutputStream().write(json.getBytes());
+        con.getInputStream().close();
+    } catch (Exception e) { e.printStackTrace(); }
+}, 0L, 6000L); // Every 5 minutes (6000 ticks)</code></pre>
+
+    <h2>Error Codes</h2>
+    <ul>
+      <li><code>401</code> — Missing or invalid API token</li>
+      <li><code>403</code> — Server is banned</li>
+      <li><code>429</code> — Rate limit exceeded</li>
+      <li><code>500</code> — Internal server error</li>
+    </ul>
+
+    <h2>Need Help?</h2>
+    <p>Join our Discord community for API support and integration help.</p>
+  </div>
+</div>
+
+<footer>
+  <div style="font-size:12px;color:var(--text-d)">&copy; 2026 Ender List. Not affiliated with Mojang Studios.</div>
+  <div style="display:flex;gap:16px;flex-wrap:wrap">
+    <a href="/faq">FAQ</a><a href="/api-docs">API</a><a href="/advertise">Advertise</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a>
+  </div>
+</footer>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+let _tt;
+function showToast(m){ const t=document.getElementById("toast"); t.textContent=m; t.classList.add("show"); clearTimeout(_tt); _tt=setTimeout(()=>t.classList.remove("show"),2400); }
+</script>
+</body>
+</html>
